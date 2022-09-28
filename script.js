@@ -1,13 +1,8 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.9.4/firebase-app.js";
 import * as rtdb from "https://www.gstatic.com/firebasejs/9.9.4/firebase-database.js"
-import * as fbauth from "https://www.gstatic.com/firebasejs/9.9.4/firebase-auth.js";
+//import * as fbauth from "https://www.gstatic.com/firebasejs/9.9.4/firebase-auth.js";
 
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
     apiKey: "AIzaSyBCplbcBc6Ofc7Yy4ZvJZa8oXh5rmeZgLc",
     authDomain: "olympics-91f1f.firebaseapp.com",
@@ -22,36 +17,28 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 let db = rtdb.getDatabase(app);
 
-let games = rtdb.ref(db, `/games`);
+let gamesRef = rtdb.ref(db, `/games`);
+let teamsRef = rtdb.ref(db, `/teams`);
 
-const TEAM_COUNT = 8;
-const GAME_COUNT = TEAM_COUNT/2;
+let gameNames;
 
-resetDatabase();
+const TEAM_COUNT = 5;
+const GAME_COUNT = 3;
 
-rtdb.get(games).then((response)=>{
-    let data = response.val();
-    for(let game of Object.keys(data)){
-        $(`#${game} #setwin`).on('click', ()=>{
-            let gameRef = rtdb.ref(db, `/games/${game}`);
-            rtdb.get(gameRef).then((response)=>{
-                let data = response.val();
-                for(let i = 1; i <= GAME_COUNT; i++){ 
-                    if(!data[`game${i}`].played){
-                        $(`#game-title`)[0].innerHTML = `${game} - game ${i}`;
-                        let team1 = data[`game${i}`]['team1'];
-                        let team2 = data[`game${i}`]['team2'];
-                        $(`#teamLabel1`)[0].innerHTML = team1;
-                        $(`#teamLabel2`)[0].innerHTML = team2;
-                        break;
-                    }
-                }
-            });
-        });
+//resetDatabase();
+
+// add listeners for SET WINNER + START NEXT GAME buttons in each game card
+rtdb.get(gamesRef).then((response)=>{
+    let gamesData = response.val();
+    for(let game of Object.keys(gamesData)){
+        $(`#${game} #startgame`).on('click', ()=>{startGame(game)});
+        $(`#${game} #setwin`).on('click', ()=>{updateModal(game)});
     }
 });
 
+// submit winner button in modal
 $('#submit-winner').on('click', (event)=>{
+    // get winning team name from radios
     let winner;
     if ($(`#teamRadio1`)[0].checked)
         winner = $(`#teamLabel1`)[0].innerHTML;
@@ -61,125 +48,143 @@ $('#submit-winner').on('click', (event)=>{
 
     if (winner){
         let gameName = $(`#game-title`)[0].innerHTML.split('-')[0].trim();
-        let gameNum = $(`#game-title`)[0].innerHTML.split('-')[1].trim().replace(' ', '');
-        let gameRef = rtdb.ref(db, `/games/${gameName}/${gameNum}/`);
-        rtdb.update(gameRef, {winner: winner}).then(()=> {
-            $('#exampleModal').modal('toggle');
-            $(`#teamRadio1`)[0].checked = false;
-            $(`#teamRadio2`)[0].checked = false;
-        });
+        let roundNum = $(`#game-title`)[0].innerHTML.split('-')[1].trim().split(' ')[1];
+        let gameRef = rtdb.ref(db, `/games/${gameName}`);
+        
+        rtdb.get(gameRef).then(response =>{
+            // update is_playing and on_deck
+            let gameData = response.val();
+            gameData[`game${roundNum}`].is_playing = false;
+            gameData[`game${roundNum}`].played = true;
+            gameData[`game${roundNum}`].winner = winner;
+
+            // update team info for winning / playing the game
+            let otherTeam = winner == gameData[`game${roundNum}`]['team1'] ? gameData[`game${roundNum}`]['team2'] : gameData[`game${roundNum}`]['team1'];
+            setGamePlayed(winner, gameName, true);
+            setGamePlayed(otherTeam, gameName, false);
+
+            rtdb.update(gameRef, gameData).then(()=>{
+                updateGames();
+                $('#exampleModal').modal('toggle');
+                $(`#teamRadio1`)[0].checked = false;
+                $(`#teamRadio2`)[0].checked = false;
+            });
+
+        });  
+
     }
 
 });
 
 // updates the games on the screen with the current status
 function updateGames(){
-    rtdb.get(games).then((response)=>{
-        let data = response.val();
-        for(let game of Object.keys(data)){
+    rtdb.get(gamesRef).then((response)=>{
+        let gamesData = response.val();
+        for(let game of Object.keys(gamesData)){
     
             for(let i = 1; i <= GAME_COUNT; i++){
                 console.log(i);
-                $(`#${game} #game${i}`)[0].innerHTML = `Game ${i}: ${data[game][`game${i}`]['team1']} vs ${data[game][`game${i}`]['team2']}`;
-                if (data[game][`game${i}`]['winner']){
-                    $(`#${game} #game${i}`)[0].innerHTML += `- ${data[game][`game${i}`]['winner']} WON`;
-                } else if (data[game][`game${i}`]['is_playing']){
+                $(`#${game} #game${i}`)[0].innerHTML = `Game ${i}: ${gamesData[game][`game${i}`]['team1']} vs ${gamesData[game][`game${i}`]['team2']}`;
+                if (gamesData[game][`game${i}`]['winner']){
+                    $(`#${game} #game${i}`)[0].innerHTML += `- ${gamesData[game][`game${i}`]['winner']} WON`;
+                } else if (gamesData[game][`game${i}`]['is_playing']){
                     $(`#${game} #game${i}`)[0].innerHTML += ' - PLAYING NOW';
-                } else if (data[game][`game${i}`]['on_deck']){
+                } else if (gamesData[game][`game${i}`]['on_deck']){
                     $(`#${game} #game${i}`)[0].innerHTML += ' - ON DECK';
                 }   
             }
             
         }
-        
     });    
 }
-
 updateGames();
 
+// update leaderboard with current teams status
 function updateTeams(){
-    let teamsRef = rtdb.ref(db, 'teams');
     rtdb.get(teamsRef).then(response=>{
-        let data = response.val();
-        let teams = Object.keys(data);
-        $('#allteams').empty();
+        let teamsData = response.val();
+        // list of team names in order of most wins
+        let teams = Object.entries(teamsData).sort((a,b) => b[1].wins-a[1].wins).map(el=> el[0]);
+        $('#teams-table').empty();
 
+        let place = 1;
         for (let team of teams){
             let gamesPlayed = [];
-            let gameNames = Object.keys(data[team]['games_played']);
+            gameNames = Object.keys(teamsData[team]['games_played']);
             for (let gameName of gameNames){
-                if (data[team]['games_played'][gameName])
+                if (teamsData[team]['games_played'][gameName])
                     gamesPlayed.push(gameName);
             }
-            $('#allteams').append(
-                `<div class="col" id="${team}">
-                    <h3 id="name">${team}</h3>
-                    <p id="played">Games Played: ${gamesPlayed}</p>
-                    <p id="wins">Team Wins: ${data[team].wins}</p>
-                    <p id="score">Team Score: ${data[team].score}</p>
-                </div>`
-            );
+            $('#teams-table').append(`
+            <tr class="list__row" data-gamesplayed=${gamesPlayed}>
+              <td class="list__cell"><span class="list__value">${place}</span></td>
+              <td class="list__cell"><span class="list__value">${team}</span></td>
+              <td class="list__cell"><span class="list__value">${teamsData[team].wins}</span><small class="list__label">Wins</small></td>
+            </tr>`);
+
+            place++;
         }
+
+        addRowListeners();
 
     });
 }
 updateTeams();
 
-
-// change listener for 'winner' under each game/game#
-// set current teams to be not playing, on deck team --> playing, next next team --> on deck
-// increase wins count for the winning team and mark both teams as played this game
-rtdb.get(games).then((response)=>{
-    let data = response.val();
-    for(let game of Object.keys(data)){
-        for (let i = 1; i <= GAME_COUNT; i++){
-            let gameWinner = rtdb.ref(db, `/games/${game}/game${i}/winner`);
-            rtdb.onValue(gameWinner, response=>{
-                let winningTeam = response.val();
-                if(winningTeam){
-                    let gameRef = response.ref.parent.parent;
-                    rtdb.get(gameRef).then(response =>{
-                        // update is_playing and on_deck
-                        let games = response.val();
-                        games[`game${i}`].is_playing = false;
-                        games[`game${i}`].played = true;
-            
-                        if(i+1 <= GAME_COUNT){
-                            games[`game${i+1}`].is_playing = true;
-                            games[`game${i+1}`].on_deck = false;
-                        }
-                        if (i+2 <= GAME_COUNT)
-                            games[`game${i+2}`].on_deck = true;
-    
-                        // update team info for winning / playing the game
-                        let otherTeam = winningTeam == games[`game${i}`]['team1'] ? games[`game${i}`]['team2'] : games[`game${i}`]['team1'];
-                        updateTeamInfo(winningTeam, game, true);
-                        updateTeamInfo(otherTeam, game, false);
-
-                        
-                        rtdb.update(gameRef, games).then(()=>{
-                            updateGames();
-                        });
-        
-                    });    
-                }
-            });       
+// update modal for the correct game / round
+function updateModal(game){
+    let gameRef = rtdb.ref(db, `/games/${game}`);
+    rtdb.get(gameRef).then((response)=>{
+        let gameData = response.val();
+        for(let i = 1; i <= GAME_COUNT; i++){ 
+            if(!gameData[`game${i}`].played){
+                $(`#game-title`)[0].innerHTML = `${game} - game ${i}`;
+                let team1 = gameData[`game${i}`]['team1'];
+                let team2 = gameData[`game${i}`]['team2'];
+                $(`#teamLabel1`)[0].innerHTML = team1;
+                $(`#teamLabel2`)[0].innerHTML = team2;
+                break;
+            }
         }
-    }
-    
-});
+    });
+}
+
+
+// start the on deck round
+function startGame(gameName){
+    let gameRef = rtdb.ref(db, `games/${gameName}`);
+    rtdb.get(gameRef).then(response =>{
+        let gameData = response.val();
+        for(let i = 1; i <= GAME_COUNT; i++){ 
+            if(!gameData[`game${i}`].played){
+                gameData[`game${i}`].is_playing = true;
+                gameData[`game${i}`].on_deck = false;
+                
+                if (i+1 <= GAME_COUNT)
+                    gameData[`game${i+1}`].on_deck = true;
+                
+                rtdb.update(gameRef, gameData).then(()=>{
+                    updateGames();
+                });
+                    
+                break;
+            }
+        }
+    });   
+}
+
 
 
 // increase win count / mark game as played
-function updateTeamInfo(teamName, game, win){
+function setGamePlayed(teamName, game, win){
     let teamRef = rtdb.ref(db, `/teams/${teamName}`);
     rtdb.get(teamRef).then(response=>{
-        let data = response.val();
+        let teamData = response.val();
         if (win) 
-            data['wins'] += 1;
-        data['games_played'][`${game}`] = true;
+            teamData['wins'] += 1;
+        teamData['games_played'][`${game}`] = true;
 
-        rtdb.update(teamRef, data).then(()=>{
+        rtdb.update(teamRef, teamData).then(()=>{
             updateTeams();
         });
     });
@@ -203,24 +208,111 @@ function resetDatabase(){
     }
     
     console.log(teamData);
-    rtdb.set(rtdb.ref(db, '/teams/'), teamData);
-    
-    
-    let gameData = {"beerball": {}, "baseball": {}, "flip": {}, "stack": {}, "pong": {}, };
-    for (let gameName of Object.keys(gameData)){
-        for(let i = 0; i < GAME_COUNT; i++){
-            gameData[gameName][`game${i+1}`] = {
-                "is_playing": i == 0,
-                "on_deck": i == 1,
-                "played": false,
-                "team1": `team${1+2*i}`,
-                "team2": `team${2+2*i}`
-            }
-        }
-    }
-
-    console.log(gameData);
-    rtdb.set(games, gameData);
+    rtdb.set(teamsRef, teamData);
     
 }
 
+
+
+/* *********************** */
+
+console.clear();
+
+const overlay = document.querySelector(".overlay");
+const sidebar = document.querySelector(".sidebar");
+const closeOverlayBtn = document.querySelector(".button--close");
+
+const sidebarClose = () => {
+	sidebar.classList.remove("is-open");
+	overlay.style.opacity = 0;
+	setTimeout(() => {
+		overlay.classList.remove("is-open");
+		overlay.style.opacity = 1;
+	}, 300);
+};
+
+function addRowListeners(){
+    let tableRow = document.querySelectorAll(".list__row");
+    tableRow.forEach(tableRow => {
+        tableRow.addEventListener("click", function() {
+            overlay.style.opacity = 0;
+            overlay.classList.add("is-open");
+            sidebar.classList.add("is-open");
+            setTimeout(() => {
+                overlay.style.opacity = 1;
+            }, 100);
+            
+            // Sidebar content
+            const sidebarBody = document.querySelector(".sidebar__body");
+            sidebarBody.innerHTML = '';
+            
+            const place = this.querySelector(".list__cell:nth-of-type(1) .list__value").innerHTML;
+            const teamName = this.querySelector(".list__cell:nth-of-type(2) .list__value").innerHTML;
+            const score = this.querySelector(".list__cell:nth-of-type(3) .list__value").innerHTML;
+
+            const gamesPlayed = this.dataset.gamesplayed.split(',');
+            
+            const newTeam = document.createElement('div');
+            newTeam.classList = 'driver';
+            
+            const content = document.createElement('div');
+            content.classList = 'driver__content';
+            
+            const title = document.createElement('div');
+            title.classList = 'driver__title';
+            title.innerHTML = teamName;
+            content.appendChild(title);
+            
+            const teamInfo = document.createElement('div');
+            teamInfo.innerHTML = `
+            <table class="driver__table">
+                <tbody>
+                    <tr>
+                        <td><small>Place</small></td>
+                        <td>${place}</td>
+                    </tr>
+                    <tr>
+                        <td><small>Wins</small></td>
+                        <td>${score}</td>
+                    </tr>
+                    <tr>
+                        <td>Games</td>
+                    </tr>
+                    <tr>
+                        <td><small>${gameNames[0]}</small></td>
+                        <td>${gamesPlayed.includes(gameNames[0]) ? 'Played' : 'Haven\'t Played'}</td>
+                    </tr>
+                    <tr>
+                        <td><small>${gameNames[1]}</small></td>
+                        <td>${gamesPlayed.includes(gameNames[1]) ? 'Played' : 'Haven\'t Played'}</td>
+                    </tr>
+                    <tr>
+                        <td><small>${gameNames[2]}</small></td>
+                        <td>${gamesPlayed.includes(gameNames[2]) ? 'Played' : 'Haven\'t Played'}</td>
+                    </tr>
+                    <tr>
+                        <td><small>${gameNames[3]}</small></td>
+                        <td>${gamesPlayed.includes(gameNames[3]) ? 'Played' : 'Haven\'t Played'}</td>
+                    </tr>
+                    <tr>
+                        <td><small>${gameNames[4]}</small></td>
+                        <td>${gamesPlayed.includes(gameNames[4]) ? 'Played' : 'Haven\'t Played'}</td>
+                    </tr>
+                </tbody>
+            </table>`;
+            content.appendChild(teamInfo);
+            
+            newTeam.appendChild(content);
+            sidebarBody.appendChild(newTeam);
+            
+        });
+    });
+}
+
+closeOverlayBtn.addEventListener("click", function() {
+	sidebarClose();
+});
+
+overlay.addEventListener("click", function() {
+	sidebarClose();
+});
