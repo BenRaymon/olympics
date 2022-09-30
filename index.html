@@ -19,94 +19,52 @@
 
 <body>
 
-    <div class="container wrapper">
-
-        <div class="wrapper">
-            <div class="list">
-                <div class="list__header">
-                    <h5>Beer Olympics</h5>
-                    <h1>Leaderboard</h1>
-                </div>
-                <div class="list__body">
-                    <table class="list__table" id="teams-table">
-                        <tbody></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+    <div class="container">
 
         <div class="row">
-            <h1> Games </h1>
+
+            <div class="col-6">
+                <div class="wrapper">
+                    <div class="list">
+                        <div class="list__header">
+                            <h1>Leaderboard</h1>
+                        </div>
+                        <div class="list__body">
+                            <table class="list__table" id="teams-table">
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>        
+            </div>
+
+            <div class="col-6">
+                <div class="wrapper">
+                    <div class="list">
+                        <div class="list__header">
+                            <h1>Games</h1>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-2 round-header">
+                                Round #
+                            </div>
+                            <div class="col-10 game-header">
+                                Game
+                            </div>
+                        </div>
+
+                        <div class="list__body">
+                            <table class="list__table" id="games-table">
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
-        <div class="row">
-            <div class="col-4 card">
-                <div class="card-body" id="beerball">
-                    <h3 class="card-title">Beer Ball</h3>
-                    <p id="game1"></p>
-                    <p id="game2"></p>
-                    <p id="game3"></p>
-                    <p id="game4"></p>
-                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#exampleModal"
-                        id="setwin">Set Winner</button>
-                    <button class="btn btn-primary" id="startgame">Start Next Game</button>
-                </div>
-            </div>
-
-            <div class="col-4 card">
-                <div class="card-body" id="flip">
-                    <h3 class="card-title">Flip Cup</h3>
-                    <p id="game1"></p>
-                    <p id="game2"></p>
-                    <p id="game3"></p>
-                    <p id="game4"></p>
-                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#exampleModal"
-                        id="setwin">Set Winner</button>
-                    <button class="btn btn-primary" id="startgame">Start Next Game</button>
-                </div>
-            </div>
-
-            <div class="col-4 card">
-                <div class="card-body" id="pong">
-                    <h3 class="card-title">Beer Pong</h3>
-                    <p id="game1"></p>
-                    <p id="game2"></p>
-                    <p id="game3"></p>
-                    <p id="game4"></p>
-                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#exampleModal"
-                        id="setwin">Set Winner</button>
-                    <button class="btn btn-primary" id="startgame">Start Next Game</button>
-                </div>
-            </div>
-
-            <div class="col-4 card">
-                <div class="card-body" id="stack">
-                    <h3 class="card-title">Stack Cup</h3>
-                    <p id="game1"></p>
-                    <p id="game2"></p>
-                    <p id="game3"></p>
-                    <p id="game4"></p>
-                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#exampleModal"
-                        id="setwin">Set Winner</button>
-                    <button class="btn btn-primary" id="startgame">Start Next Game</button>
-                </div>
-            </div>
-
-            <div class="col-4 card">
-                <div class="card-body" id="baseball">
-                    <h3 class="card-title">Baseball</h3>
-                    <p id="game1"></p>
-                    <p id="game2"></p>
-                    <p id="game3"></p>
-                    <p id="game4"></p>
-                    <button class="btn btn-primary" id="startgame">Start Next Game</button>
-                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#exampleModal"
-                        id="setwin">Set Winner</button>
-                </div>
-            </div>
-
-
-        </div>
 
         <div class="overlay"></div>
         <div class="sidebar">
@@ -125,13 +83,6 @@
             <div class="sidebar__body"></div>
         </div>
 
-        <!-- <div class="row">
-            <h1> Teams </h1>
-        </div>
-
-        <div class="row" id="allteams"></div> -->
-
-
     </div>
 
     <div class="modal fade" id="exampleModal" tabindex="-1" aria-hidden="true">
@@ -142,7 +93,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <h4 id="game-title">Game 1</h4>
+                    <h4 id="game-title">Game - Round 1</h4>
                     <div class="btn-group">
                         <div class="form-check form-check-inline">
                             <input class="form-check-input" type="radio" name="inlineRadioOptions" id="teamRadio1"

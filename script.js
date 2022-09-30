@@ -21,124 +21,147 @@ let gamesRef = rtdb.ref(db, `/games`);
 let teamsRef = rtdb.ref(db, `/teams`);
 
 let gameNames;
+let teamNames;
 
 const TEAM_COUNT = 5;
-const GAME_COUNT = 3;
+const ROUND_COUNT = 3;
+const NUM_GAMES = 5;
 
-//resetDatabase();
 
-// add listeners for SET WINNER + START NEXT GAME buttons in each game card
+// on initial page load - get a list of game names and team names
 rtdb.get(gamesRef).then((response)=>{
-    let gamesData = response.val();
-    for(let game of Object.keys(gamesData)){
-        $(`#${game} #startgame`).on('click', ()=>{startGame(game)});
-        $(`#${game} #setwin`).on('click', ()=>{updateModal(game)});
-    }
+    gameNames = Object.keys(response.val());
+});
+rtdb.get(teamsRef).then((response)=>{
+    teamNames = Object.keys(response.val());
 });
 
 // submit winner button in modal
 $('#submit-winner').on('click', (event)=>{
-    // get winning team name from radios
-    let winner;
-    if ($(`#teamRadio1`)[0].checked)
-        winner = $(`#teamLabel1`)[0].innerHTML;
-    else if ($(`#teamRadio2`)[0].checked)
-        winner = $(`#teamLabel2`)[0].innerHTML;
-    else alert("MUST PICK WINNER");
+    // get winner from checkbox
+    let winner = $(`#teamRadio1`)[0].checked ? $(`#teamLabel1`)[0].innerHTML : ($(`#teamRadio2`)[0].checked ? $(`#teamLabel2`)[0].innerHTML : null);
+    
+    let gameName = $(`#game-title`)[0].innerHTML.split('-')[0].trim();
+    let roundNum = $(`#game-title`)[0].innerHTML.split('-')[1].trim().split(' ')[1];
+    let gameRef = rtdb.ref(db, `/games/${gameName}`);
+    
+    rtdb.get(gameRef).then(response =>{
+        let gameData = response.val();
 
-    if (winner){
-        let gameName = $(`#game-title`)[0].innerHTML.split('-')[0].trim();
-        let roundNum = $(`#game-title`)[0].innerHTML.split('-')[1].trim().split(' ')[1];
-        let gameRef = rtdb.ref(db, `/games/${gameName}`);
-        
-        rtdb.get(gameRef).then(response =>{
-            // update is_playing and on_deck
-            let gameData = response.val();
-            gameData[`game${roundNum}`].is_playing = false;
-            gameData[`game${roundNum}`].played = true;
-            gameData[`game${roundNum}`].winner = winner;
+        if (!gameData[`game${roundNum}`].is_playing){
+            $('#exampleModal').modal('toggle');
+            alert('Start round before picking a winner');
+            return;
+        }
 
-            // update team info for winning / playing the game
-            let otherTeam = winner == gameData[`game${roundNum}`]['team1'] ? gameData[`game${roundNum}`]['team2'] : gameData[`game${roundNum}`]['team1'];
-            setGamePlayed(winner, gameName, true);
-            setGamePlayed(otherTeam, gameName, false);
+        if (!winner){
+            alert("Must pick a winning team to submit winner");
+            return;
+        }
 
-            rtdb.update(gameRef, gameData).then(()=>{
-                updateGames();
-                $('#exampleModal').modal('toggle');
-                $(`#teamRadio1`)[0].checked = false;
-                $(`#teamRadio2`)[0].checked = false;
-            });
+        gameData[`game${roundNum}`].is_playing = false;
+        gameData[`game${roundNum}`].played = true;
+        gameData[`game${roundNum}`].winner = winner;
 
-        });  
+        // update info for the 2 teams that just finished their game
+        setGamePlayed(gameData[`game${roundNum}`], gameName, roundNum);
+        $('#exampleModal').modal('toggle');
+        $(`#teamRadio1`)[0].checked = false;
+        $(`#teamRadio2`)[0].checked = false;
 
-    }
+    });  
 
 });
 
-// updates the games on the screen with the current status
+// updates the games list with the current status
 function updateGames(){
-    rtdb.get(gamesRef).then((response)=>{
+    rtdb.get(gamesRef).then(async (response)=>{
+        $('#games-table').empty();
+
         let gamesData = response.val();
-        for(let game of Object.keys(gamesData)){
+        for(let game of gameNames){
+
+            $('#games-table').append(`
+            <tr class="list__row__game" id=${game} data-game='${game}' data-games='${JSON.stringify(gamesData[game])}'>
+                <td class="list__cell"><span class="list__value" id='round'>1</span></td>
+                <td class="list__cell"><span class="list__value" id='${game}'>${game}</span></td>
+            </tr>`);
+
+            if (game == 'shotgun'){
+                if($(`#table-${game}`)[0]?.innerHTML){
+                    $(`#table-${game}`)[0].innerHTML = await createGameSidebarContent(gamesData[game], game);
+                }
+                continue;
+            }
     
-            for(let i = 1; i <= GAME_COUNT; i++){
-                console.log(i);
-                $(`#${game} #game${i}`)[0].innerHTML = `Game ${i}: ${gamesData[game][`game${i}`]['team1']} vs ${gamesData[game][`game${i}`]['team2']}`;
-                if (gamesData[game][`game${i}`]['winner']){
-                    $(`#${game} #game${i}`)[0].innerHTML += `- ${gamesData[game][`game${i}`]['winner']} WON`;
-                } else if (gamesData[game][`game${i}`]['is_playing']){
-                    $(`#${game} #game${i}`)[0].innerHTML += ' - PLAYING NOW';
-                } else if (gamesData[game][`game${i}`]['on_deck']){
-                    $(`#${game} #game${i}`)[0].innerHTML += ' - ON DECK';
-                }   
+            let played = false;
+
+            for(let i = 1; i <= ROUND_COUNT; i++){
+                // find and set the current count number
+                if(!played && !gamesData[game][`game${i}`]['played']){
+                    played = true;
+                    $(`#games-table #${game}`)[0].children[0].children[0].innerHTML = i;
+                }
+
+                // populate the sidebar popout with game information
+                if($(`#table-${game}`)[0]?.innerHTML){
+                    $(`#table-${game}`)[0].innerHTML = await createGameSidebarContent(gamesData[game], game); 
+                    $(`#table-${game} #startgame`).on('click', ()=>{startGame(game)});
+                    $(`#table-${game} #setwin`).on('click', ()=>{updateModal(game)});
+                } 
             }
             
         }
+
+        addGameRowListeners();
+
     });    
 }
 updateGames();
+
 
 // update leaderboard with current teams status
 function updateTeams(){
     rtdb.get(teamsRef).then(response=>{
         let teamsData = response.val();
-        // list of team names in order of most wins
-        let teams = Object.entries(teamsData).sort((a,b) => b[1].wins-a[1].wins).map(el=> el[0]);
+        // list of team names in order of most points
+        let teams = Object.entries(teamsData).sort((a,b) => b[1].score-a[1].score).map(el=> el[0]);
         $('#teams-table').empty();
 
         let place = 1;
         for (let team of teams){
             let gamesPlayed = [];
-            gameNames = Object.keys(teamsData[team]['games_played']);
             for (let gameName of gameNames){
                 if (teamsData[team]['games_played'][gameName])
                     gamesPlayed.push(gameName);
             }
+            // set leaderboard row for the team
             $('#teams-table').append(`
-            <tr class="list__row" data-gamesplayed=${gamesPlayed}>
+            <tr class="list__row__team" data-gamesplayed=${gamesPlayed}>
               <td class="list__cell"><span class="list__value">${place}</span></td>
               <td class="list__cell"><span class="list__value">${team}</span></td>
-              <td class="list__cell"><span class="list__value">${teamsData[team].wins}</span><small class="list__label">Wins</small></td>
+              <td class="list__cell val"><span class="list__value">${teamsData[team].wins}</span><small class="list__label">Wins</small></td>
+              <td class="list__cell val"><span class="list__value">${teamsData[team].score}</span><small class="list__label">Points</small></td>
             </tr>`);
 
             place++;
         }
 
-        addRowListeners();
+        addTeamRowListeners();
 
     });
 }
 updateTeams();
 
-// update modal for the correct game / round
-function updateModal(game){
-    let gameRef = rtdb.ref(db, `/games/${game}`);
+
+// update modal to show the teams playing the current round of that game
+function updateModal(gameName){
+    let gameRef = rtdb.ref(db, `/games/${gameName}`);
     rtdb.get(gameRef).then((response)=>{
         let gameData = response.val();
-        for(let i = 1; i <= GAME_COUNT; i++){ 
+        for(let i = 1; i <= ROUND_COUNT; i++){ 
             if(!gameData[`game${i}`].played){
-                $(`#game-title`)[0].innerHTML = `${game} - game ${i}`;
+                $(`#game-title`)[0].innerHTML = `${gameName} - round ${i}`;
                 let team1 = gameData[`game${i}`]['team1'];
                 let team2 = gameData[`game${i}`]['team2'];
                 $(`#teamLabel1`)[0].innerHTML = team1;
@@ -151,16 +174,18 @@ function updateModal(game){
 
 
 // start the on deck round
+// updates game info in database 
 function startGame(gameName){
+    console.log("TEST");
     let gameRef = rtdb.ref(db, `games/${gameName}`);
     rtdb.get(gameRef).then(response =>{
         let gameData = response.val();
-        for(let i = 1; i <= GAME_COUNT; i++){ 
+        for(let i = 1; i <= ROUND_COUNT; i++){ 
             if(!gameData[`game${i}`].played){
                 gameData[`game${i}`].is_playing = true;
                 gameData[`game${i}`].on_deck = false;
                 
-                if (i+1 <= GAME_COUNT)
+                if (i+1 <= ROUND_COUNT)
                     gameData[`game${i+1}`].on_deck = true;
                 
                 rtdb.update(gameRef, gameData).then(()=>{
@@ -174,45 +199,89 @@ function startGame(gameName){
 }
 
 
-
 // increase win count / mark game as played
-function setGamePlayed(teamName, game, win){
-    let teamRef = rtdb.ref(db, `/teams/${teamName}`);
-    rtdb.get(teamRef).then(response=>{
-        let teamData = response.val();
-        if (win) 
-            teamData['wins'] += 1;
-        teamData['games_played'][`${game}`] = true;
+// updates team info in database for both playing teams
+// updates game info in database for game played
+function setGamePlayed(gameRoundData, gameName, roundNum){
+    let winner = gameRoundData['winner'];
+    let otherTeam = winner == gameRoundData['team1'] ? gameRoundData['team2'] : gameRoundData['team1'];
 
-        rtdb.update(teamRef, teamData).then(()=>{
+    // winning team played + win count increases
+    let winningTeamRef = rtdb.ref(db, `/teams/${winner}`);
+    rtdb.get(winningTeamRef).then(response=>{
+        let teamData = response.val();
+        teamData['wins'] += 1;
+
+        if (roundNum <= 3) // regular rounds 10 points
+            teamData['score'] += 10;
+        else if (roundNum == 4) // semi finals 15 points
+            teamData['score'] += 15;
+        else if (roundNum == 5) // finals 20 points
+            teamData['score'] += 20;
+        
+        teamData['games_played'][`${gameName}`] = true;
+
+        rtdb.update(winningTeamRef, teamData).then(()=>{
             updateTeams();
         });
     });
+
+    // other team just mark game as played
+    let otherTeamRef = rtdb.ref(db, `/teams/${otherTeam}`);
+    rtdb.get(otherTeamRef).then(response=>{
+        let teamData = response.val();
+        teamData['games_played'][`${gameName}`] = true;
+
+        rtdb.update(otherTeamRef, teamData).then(()=>{
+            updateTeams();
+        });
+    });
+
+    let gameRoundRef = rtdb.ref(db, `games/${gameName}/game${roundNum}`);
+    rtdb.update(gameRoundRef, gameRoundData).then(()=>{
+        updateGames();
+    });
+
 }
 
-
-function resetDatabase(){
-    let teamData = {};
-    for(let i = 0; i < TEAM_COUNT; i++){
-        teamData[`team${i+1}`] = {
-            wins: 0,
-            score: 0,
-            games_played: {
-                 beerball: false,
-                 flip: false,
-                 pong: false,
-                 stack: false,
-                 baseball: false 
-            },
+function saveShotgunResults(){
+    let data = {};
+    for (let team of teamNames) {
+        if ($(`#${team}-select`)[0].value == 'Select') {
+            alert('Select the standing for every team');
+            return;
+        } else if (data[$(`#${team}-select`)[0].value]){
+            alert('Two teams cannot have the same standing');
+            return;
         }
+
+        data[$(`#${team}-select`)[0].value] = team;
     }
-    
-    console.log(teamData);
-    rtdb.set(teamsRef, teamData);
-    
+
+    // NEED TO ADD POINTS FOR THE SHOTGUN STANDINGS
+    let standings = Object.values(data);
+    let i = 0;
+    for (let team of standings){
+        let teamRef = rtdb.ref(db, `/teams/${team}`);
+        rtdb.get(teamRef).then(response=>{
+            let teamData = response.val();
+            teamData['games_played'][`shotgun`] = true;
+            if (10-3*i > 0)
+                teamData['score'] += 10-3*i;
+
+            rtdb.update(teamRef, teamData).then(()=>{
+                updateTeams();
+            });
+
+            i++;
+        });
+    }
+
+    data['played'] = true;
+
+    let shotgunRef = rtdb.ref(db, '/games/shotgun/');
+    rtdb.set(shotgunRef, data);
 }
-
-
 
 /* *********************** */
 
@@ -231,8 +300,60 @@ const sidebarClose = () => {
 	}, 300);
 };
 
-function addRowListeners(){
-    let tableRow = document.querySelectorAll(".list__row");
+function addGameRowListeners(){
+    let tableRow = document.querySelectorAll(".list__row__game");
+    tableRow.forEach(tableRow => {
+        tableRow.addEventListener("click", async function() {
+            overlay.style.opacity = 0;
+            overlay.classList.add("is-open");
+            sidebar.classList.add("is-open");
+            setTimeout(() => {
+                overlay.style.opacity = 1;
+            }, 100);
+            
+            // Sidebar content
+            const sidebarTitle = document.querySelector(".sidebar__title");
+            sidebarTitle.innerHTML = 'Game Information';
+
+            const sidebarBody = document.querySelector(".sidebar__body");
+            sidebarBody.innerHTML = '';
+            
+            const games = JSON.parse(this.dataset.games);
+            const game = this.dataset.game;
+
+            const newGame = document.createElement('div');
+            newGame.classList = 'info';
+            
+            const content = document.createElement('div');
+            content.classList = 'info__content';
+            
+            const title = document.createElement('div');
+            title.classList = 'info__title';
+            title.innerHTML = game;
+            content.appendChild(title);
+            
+            const gameInfo = document.createElement('div');
+            gameInfo.innerHTML = await createGameSidebarContent(games, game);
+            content.appendChild(gameInfo);
+            
+            newGame.appendChild(content);
+            sidebarBody.appendChild(newGame);
+
+            if (game != 'shotgun'){
+                $(`#table-${game} #startgame`).on('click', ()=>{startGame(game)});
+                $(`#table-${game} #setwin`).on('click', ()=>{updateModal(game)});
+            } else {
+                $('#saveresults').on('click', ()=>{saveShotgunResults()});
+            }
+            
+        });
+    });
+
+}
+
+
+function addTeamRowListeners(){
+    let tableRow = document.querySelectorAll(".list__row__team");
     tableRow.forEach(tableRow => {
         tableRow.addEventListener("click", function() {
             overlay.style.opacity = 0;
@@ -243,29 +364,34 @@ function addRowListeners(){
             }, 100);
             
             // Sidebar content
+            const sidebarTitle = document.querySelector(".sidebar__title");
+            sidebarTitle.innerHTML = 'Team Information';
+
             const sidebarBody = document.querySelector(".sidebar__body");
             sidebarBody.innerHTML = '';
             
             const place = this.querySelector(".list__cell:nth-of-type(1) .list__value").innerHTML;
             const teamName = this.querySelector(".list__cell:nth-of-type(2) .list__value").innerHTML;
-            const score = this.querySelector(".list__cell:nth-of-type(3) .list__value").innerHTML;
+            const wins = this.querySelector(".list__cell:nth-of-type(3) .list__value").innerHTML;
+            const score = this.querySelector(".list__cell:nth-of-type(4) .list__value").innerHTML;
+
 
             const gamesPlayed = this.dataset.gamesplayed.split(',');
             
             const newTeam = document.createElement('div');
-            newTeam.classList = 'driver';
+            newTeam.classList = 'info';
             
             const content = document.createElement('div');
-            content.classList = 'driver__content';
+            content.classList = 'info__content';
             
             const title = document.createElement('div');
-            title.classList = 'driver__title';
+            title.classList = 'info__title';
             title.innerHTML = teamName;
             content.appendChild(title);
             
             const teamInfo = document.createElement('div');
             teamInfo.innerHTML = `
-            <table class="driver__table">
+            <table class="info__table">
                 <tbody>
                     <tr>
                         <td><small>Place</small></td>
@@ -273,31 +399,16 @@ function addRowListeners(){
                     </tr>
                     <tr>
                         <td><small>Wins</small></td>
+                        <td>${wins}</td>
+                    </tr>
+                    <tr>
+                        <td><small>Points</small></td>
                         <td>${score}</td>
                     </tr>
                     <tr>
                         <td>Games</td>
                     </tr>
-                    <tr>
-                        <td><small>${gameNames[0]}</small></td>
-                        <td>${gamesPlayed.includes(gameNames[0]) ? 'Played' : 'Haven\'t Played'}</td>
-                    </tr>
-                    <tr>
-                        <td><small>${gameNames[1]}</small></td>
-                        <td>${gamesPlayed.includes(gameNames[1]) ? 'Played' : 'Haven\'t Played'}</td>
-                    </tr>
-                    <tr>
-                        <td><small>${gameNames[2]}</small></td>
-                        <td>${gamesPlayed.includes(gameNames[2]) ? 'Played' : 'Haven\'t Played'}</td>
-                    </tr>
-                    <tr>
-                        <td><small>${gameNames[3]}</small></td>
-                        <td>${gamesPlayed.includes(gameNames[3]) ? 'Played' : 'Haven\'t Played'}</td>
-                    </tr>
-                    <tr>
-                        <td><small>${gameNames[4]}</small></td>
-                        <td>${gamesPlayed.includes(gameNames[4]) ? 'Played' : 'Haven\'t Played'}</td>
-                    </tr>
+                    ${createGamesPlayed(gamesPlayed)}
                 </tbody>
             </table>`;
             content.appendChild(teamInfo);
@@ -316,3 +427,104 @@ closeOverlayBtn.addEventListener("click", function() {
 overlay.addEventListener("click", function() {
 	sidebarClose();
 });
+
+async function createGameSidebarContent(games, game){
+
+    if (game == 'shotgun'){
+        return `
+        <table class="info__table" id='table-${game}'>
+            <tbody>
+                ${await createTeamSelect()}
+            </tbody>
+        </table>`;
+    } else {
+        return `
+        <table class="info__table" id='table-${game}'>
+            <tbody>
+                ${createRounds(games)}
+                <tr>
+                    <td>
+                        <button class="btn btn-primary" id="startgame">Start Next Game</button>
+                    </td>
+                    <td>
+                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#exampleModal" id="setwin">Set Winner</button>
+                    </td>
+                </tr>
+            </tbody>
+        </table>`;
+    }
+}
+
+async function createTeamSelect(){
+    let content = ``;
+    let options = ``;
+    let places = ['First', 'Second', 'Third', 'Fourth', 'Fifth', 'Sixth', 'Seventh', 'Eighth', 'Ninth', 'Tenth'];
+    let i = 0;
+
+    let shotgunRef = rtdb.ref(db, '/games/shotgun/');
+    let x = await rtdb.get(shotgunRef).then((response)=>{
+        let gameData = response.val();
+        let teamStandings = Object.values(gameData);
+        if (gameData['played']){
+            for (let team of teamNames) {
+                content += `<tr>
+                    <td>${team}: </td>
+                    <td>${places[teamStandings.indexOf(team)]}</td>
+                </tr>`
+            }
+        } else {
+            for (let team of teamNames){
+                options += `<option value="${i}">${places[i]} Place</option>`;
+                i++;
+            }
+
+            for (let team of teamNames) {
+                content += `<tr>
+                    <td>${team}: </td>
+                    <td>
+                        <select class="form-select" id='${team}-select'>
+                            <option selected>Select</option>
+                            ${options}
+                        </select>
+                    </td>
+                </tr>`
+            } 
+
+            content += `<tr>
+                <td>
+                    <button class="btn btn-primary" id="saveresults">Save Results</button>
+                </td>
+            </tr>`
+        }
+
+        return content;
+    });
+    return x;
+}
+
+function createRounds(games){
+    let content = ``;
+    for (let i = 1; i <= ROUND_COUNT; i++){
+        content += `<tr>
+            <td>round ${i}:</td>
+            <td>${games[`game${i}`]['is_playing'] ? 'Playing Now' : (games[`game${i}`]['on_deck'] ? 'On Deck' : (games[`game${i}`]['played'] ? 'Game Over' : ''))}</td>
+            <td>${games[`game${i}`]['winner'] ? games[`game${i}`]['winner'] : games[`game${i}`]['team1']}</td>
+            <td>${games[`game${i}`]['winner'] ? 'beat' : 'vs' }</td>
+            <td>${games[`game${i}`]['winner'] ? (games[`game${i}`]['winner'] == games[`game${i}`]['team1'] ? games[`game${i}`]['team2'] : games[`game${i}`]['team1'] ) : games[`game${i}`]['team2']}</td>
+        </tr>`
+    }
+    return content;
+    
+}
+
+function createGamesPlayed(gamesPlayed){
+    let content = ``;
+    for (let game of gameNames){
+        content += `<tr>
+            <td><small>${game}</small></td>
+            <td>${gamesPlayed.includes(game) ? 'Played' : 'Haven\'t Played'}</td>
+        </tr>`
+    }
+    return content;
+    
+}
