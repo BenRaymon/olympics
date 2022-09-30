@@ -27,6 +27,9 @@ const TEAM_COUNT = 5;
 const ROUND_COUNT = 3;
 const NUM_GAMES = 5;
 
+// TODO : semifinals / finals round
+// louisville chugger
+
 
 // on initial page load - get a list of game names and team names
 rtdb.get(gamesRef).then((response)=>{
@@ -439,19 +442,15 @@ async function createGameSidebarContent(games, game){
         </table>`;
     } else {
         return `
-        <table class="info__table" id='table-${game}'>
-            <tbody>
-                ${createRounds(games)}
-                <tr>
-                    <td>
-                        <button class="btn btn-primary" id="startgame">Start Next Game</button>
-                    </td>
-                    <td>
-                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#exampleModal" id="setwin">Set Winner</button>
-                    </td>
-                </tr>
-            </tbody>
-        </table>`;
+        <div id='table-${game}'>
+            <table class="info__table">
+                <tbody>
+                    ${createRounds(games)}
+                </tbody>
+            </table>
+            <button class="btn btn-primary" id="startgame">Start Next Game</button>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#exampleModal" id="setwin">Set Winner</button>
+        </div>`;
     }
 }
 
@@ -465,8 +464,9 @@ async function createTeamSelect(){
     let x = await rtdb.get(shotgunRef).then((response)=>{
         let gameData = response.val();
         let teamStandings = Object.values(gameData);
+        teamStandings.pop();
         if (gameData['played']){
-            for (let team of teamNames) {
+            for (let team of teamStandings) {
                 content += `<tr>
                     <td>${team}: </td>
                     <td>${places[teamStandings.indexOf(team)]}</td>

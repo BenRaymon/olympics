@@ -409,7 +409,7 @@ body {
     color: var(--grey-4);
 }
 .info__table td {
-    padding: 0.3rem 0.6rem 0.3rem 0;
+    padding: 1rem 1rem 0.3rem 0;
     height: 2rem;
 }
 .info__table td img {
@@ -425,4 +425,8 @@ body {
         opacity: 1;
         left: 0;
    }
+}
+
+button {
+    margin-top: 1rem !important;
 }
