@@ -430,3 +430,8 @@ body {
 button {
     margin-top: 1rem !important;
 }
+
+.points {
+    margin-top: 0 !important;
+    height: 60%;
+}

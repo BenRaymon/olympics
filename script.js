@@ -1,7 +1,7 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.9.4/firebase-app.js";
 import * as rtdb from "https://www.gstatic.com/firebasejs/9.9.4/firebase-database.js"
-//import * as fbauth from "https://www.gstatic.com/firebasejs/9.9.4/firebase-auth.js";
+import * as fbauth from "https://www.gstatic.com/firebasejs/9.9.4/firebase-auth.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyBCplbcBc6Ofc7Yy4ZvJZa8oXh5rmeZgLc",
@@ -16,20 +16,41 @@ const firebaseConfig = {
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
 let db = rtdb.getDatabase(app);
+let auth = fbauth.getAuth(app);
 
 let gamesRef = rtdb.ref(db, `/games`);
 let teamsRef = rtdb.ref(db, `/teams`);
 
 let gameNames;
 let teamNames;
+let gamesData;
 
 const TEAM_COUNT = 5;
 const ROUND_COUNT = 3;
 const NUM_GAMES = 5;
 
+let showButtons = false;
+
 // TODO : semifinals / finals round
 // louisville chugger
 
+
+// finals - 
+// for each game get the 3 winning teams
+// eliminate the team with the least amount of points ( tie breaker ? )
+// match up two teams with more points in the final round
+
+// enter password to enable buttons
+$('#authenticate').on('click', (event)=>{
+    let email = 'test@test.com';
+    let pwd = $('#password')[0].value;
+    fbauth.signInWithEmailAndPassword(auth, email, pwd).then((ss) => {
+        $('#password')[0].value = '';
+        showButtons = true;
+    }).catch((error) => {
+        console.log(error)
+    });
+});
 
 // on initial page load - get a list of game names and team names
 rtdb.get(gamesRef).then((response)=>{
@@ -179,7 +200,6 @@ function updateModal(gameName){
 // start the on deck round
 // updates game info in database 
 function startGame(gameName){
-    console.log("TEST");
     let gameRef = rtdb.ref(db, `games/${gameName}`);
     rtdb.get(gameRef).then(response =>{
         let gameData = response.val();
@@ -240,6 +260,14 @@ function setGamePlayed(gameRoundData, gameName, roundNum){
         });
     });
 
+    // finals round
+    if (roundNum == ROUND_COUNT - 1){
+        // get the winners from all three rounds
+        // get the team data for the winners
+        // find which team has least points
+        // match up two other teams
+    }
+
     let gameRoundRef = rtdb.ref(db, `games/${gameName}/game${roundNum}`);
     rtdb.update(gameRoundRef, gameRoundData).then(()=>{
         updateGames();
@@ -261,7 +289,6 @@ function saveShotgunResults(){
         data[$(`#${team}-select`)[0].value] = team;
     }
 
-    // NEED TO ADD POINTS FOR THE SHOTGUN STANDINGS
     let standings = Object.values(data);
     let i = 0;
     for (let team of standings){
@@ -394,19 +421,19 @@ function addTeamRowListeners(){
             
             const teamInfo = document.createElement('div');
             teamInfo.innerHTML = `
-            <table class="info__table">
+            <table class="info__table ${teamName}">
                 <tbody>
                     <tr>
                         <td><small>Place</small></td>
-                        <td>${place}</td>
+                        <td id='place'>${place}</td>
                     </tr>
                     <tr>
                         <td><small>Wins</small></td>
-                        <td>${wins}</td>
+                        <td id='wins'>${wins}</td>
                     </tr>
                     <tr>
                         <td><small>Points</small></td>
-                        <td>${score}</td>
+                        <td id='score'>${score}</td>
                     </tr>
                     <tr>
                         <td>Games</td>
@@ -418,7 +445,29 @@ function addTeamRowListeners(){
             
             newTeam.appendChild(content);
             sidebarBody.appendChild(newTeam);
+
+            if (showButtons) {
+                addPointsListeners(teamName);
+            }
             
+        });
+    });
+}
+
+function addPointsListeners(teamName){
+    $("#addpoint").on('click', ()=>{
+        $(`.${teamName} #score`)[0].innerHTML = parseInt($(`.${teamName} #score`)[0].innerHTML) + 1;
+    });
+
+    $("#subtractpoint").on('click', ()=>{
+        $(`.${teamName} #score`)[0].innerHTML = parseInt($(`.${teamName} #score`)[0].innerHTML) - 1;
+    });
+
+    $("#updatepoints").on('click', ()=>{
+        let score  = parseInt($(`.${teamName} #score`)[0].innerHTML);
+        let teamRef = rtdb.ref(db, `teams/${teamName}`);
+        rtdb.update(teamRef, {'score': score}).then(()=>{
+            updateTeams();
         });
     });
 }
@@ -448,8 +497,8 @@ async function createGameSidebarContent(games, game){
                     ${createRounds(games)}
                 </tbody>
             </table>
-            <button class="btn btn-primary" id="startgame">Start Next Game</button>
-            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#exampleModal" id="setwin">Set Winner</button>
+            ${showButtons ? `<button class="btn btn-primary" id="startgame">Start Next Game</button>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#exampleModal" id="setwin">Set Winner</button>` : ''} 
         </div>`;
     }
 }
@@ -490,11 +539,14 @@ async function createTeamSelect(){
                 </tr>`
             } 
 
-            content += `<tr>
-                <td>
-                    <button class="btn btn-primary" id="saveresults">Save Results</button>
-                </td>
-            </tr>`
+            if(showButtons) {
+                content += `
+                <tr>
+                    <td>
+                        <button class="btn btn-primary" id="saveresults">Save Results</button>
+                    </td>
+                </tr>`
+            }
         }
 
         return content;
@@ -523,6 +575,18 @@ function createGamesPlayed(gamesPlayed){
         content += `<tr>
             <td><small>${game}</small></td>
             <td>${gamesPlayed.includes(game) ? 'Played' : 'Haven\'t Played'}</td>
+        </tr>`
+    }
+    if(showButtons) {
+        content += `
+        <tr>
+            <td>
+                <button id="addpoint" class="btn btn-primary">Add a point</button>
+                <button id="subtractpoint" class="btn btn-primary">Subtract a point</button>
+            </td>
+            <td>
+                <button class="btn btn-primary" id="updatepoints">Update Team Score</button>
+            </td>
         </tr>`
     }
     return content;
