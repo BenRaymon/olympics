@@ -24,21 +24,11 @@ let teamsRef = rtdb.ref(db, `/teams`);
 let gameNames;
 let teamNames;
 let gamesData;
+let teamsData;
 
-const TEAM_COUNT = 5;
-const ROUND_COUNT = 3;
-const NUM_GAMES = 5;
+const ROUND_COUNT = 4;
 
 let showButtons = false;
-
-// TODO : semifinals / finals round
-// louisville chugger
-
-
-// finals - 
-// for each game get the 3 winning teams
-// eliminate the team with the least amount of points ( tie breaker ? )
-// match up two teams with more points in the final round
 
 // enter password to enable buttons
 $('#authenticate').on('click', (event)=>{
@@ -52,12 +42,14 @@ $('#authenticate').on('click', (event)=>{
     });
 });
 
-// on initial page load - get a list of game names and team names
+// on initial page load - get current database objects
 rtdb.get(gamesRef).then((response)=>{
-    gameNames = Object.keys(response.val());
+    gamesData = response.val();    
+    gameNames = Object.keys(gamesData);
 });
 rtdb.get(teamsRef).then((response)=>{
-    teamNames = Object.keys(response.val());
+    teamsData = response.val();
+    teamNames = Object.keys(teamsData);
 });
 
 // submit winner button in modal
@@ -67,33 +59,24 @@ $('#submit-winner').on('click', (event)=>{
     
     let gameName = $(`#game-title`)[0].innerHTML.split('-')[0].trim();
     let roundNum = $(`#game-title`)[0].innerHTML.split('-')[1].trim().split(' ')[1];
-    let gameRef = rtdb.ref(db, `/games/${gameName}`);
     
-    rtdb.get(gameRef).then(response =>{
-        let gameData = response.val();
+    let gameData = gamesData[gameName];
 
-        if (!gameData[`game${roundNum}`].is_playing){
-            $('#exampleModal').modal('toggle');
-            alert('Start round before picking a winner');
-            return;
-        }
-
-        if (!winner){
-            alert("Must pick a winning team to submit winner");
-            return;
-        }
-
-        gameData[`game${roundNum}`].is_playing = false;
-        gameData[`game${roundNum}`].played = true;
-        gameData[`game${roundNum}`].winner = winner;
-
-        // update info for the 2 teams that just finished their game
-        setGamePlayed(gameData[`game${roundNum}`], gameName, roundNum);
+    if (!gameData[`game${roundNum}`].is_playing){
         $('#exampleModal').modal('toggle');
-        $(`#teamRadio1`)[0].checked = false;
-        $(`#teamRadio2`)[0].checked = false;
+        alert('Start round before picking a winner');
+        return;
+    }
 
-    });  
+    if (!winner){
+        alert("Must pick a winning team to submit winner");
+        return;
+    }
+
+    setGamePlayed(gameData[`game${roundNum}`], gameName, roundNum, winner);
+    $('#exampleModal').modal('toggle');
+    $(`#teamRadio1`)[0].checked = false;
+    $(`#teamRadio2`)[0].checked = false;
 
 });
 
@@ -101,10 +84,9 @@ $('#submit-winner').on('click', (event)=>{
 function updateGames(){
     rtdb.get(gamesRef).then(async (response)=>{
         $('#games-table').empty();
+        gamesData = response.val();
 
-        let gamesData = response.val();
         for(let game of gameNames){
-
             $('#games-table').append(`
             <tr class="list__row__game" id=${game} data-game='${game}' data-games='${JSON.stringify(gamesData[game])}'>
                 <td class="list__cell"><span class="list__value" id='round'>1</span></td>
@@ -121,7 +103,7 @@ function updateGames(){
             let played = false;
 
             for(let i = 1; i <= ROUND_COUNT; i++){
-                // find and set the current count number
+                // find and set the current round number
                 if(!played && !gamesData[game][`game${i}`]['played']){
                     played = true;
                     $(`#games-table #${game}`)[0].children[0].children[0].innerHTML = i;
@@ -134,11 +116,8 @@ function updateGames(){
                     $(`#table-${game} #setwin`).on('click', ()=>{updateModal(game)});
                 } 
             }
-            
         }
-
         addGameRowListeners();
-
     });    
 }
 updateGames();
@@ -147,7 +126,7 @@ updateGames();
 // update leaderboard with current teams status
 function updateTeams(){
     rtdb.get(teamsRef).then(response=>{
-        let teamsData = response.val();
+        teamsData = response.val();
         // list of team names in order of most points
         let teams = Object.entries(teamsData).sort((a,b) => b[1].score-a[1].score).map(el=> el[0]);
         $('#teams-table').empty();
@@ -170,9 +149,7 @@ function updateTeams(){
 
             place++;
         }
-
         addTeamRowListeners();
-
     });
 }
 updateTeams();
@@ -185,11 +162,13 @@ function updateModal(gameName){
         let gameData = response.val();
         for(let i = 1; i <= ROUND_COUNT; i++){ 
             if(!gameData[`game${i}`].played){
-                $(`#game-title`)[0].innerHTML = `${gameName} - round ${i}`;
-                let team1 = gameData[`game${i}`]['team1'];
-                let team2 = gameData[`game${i}`]['team2'];
-                $(`#teamLabel1`)[0].innerHTML = team1;
-                $(`#teamLabel2`)[0].innerHTML = team2;
+                if (i == ROUND_COUNT){
+                    $(`#game-title`)[0].innerHTML = `${gameName} - finals round`;
+                } else {
+                    $(`#game-title`)[0].innerHTML = `${gameName} - round ${i}`;
+                }
+                $(`#teamLabel1`)[0].innerHTML = gameData[`game${i}`]['team1'];
+                $(`#teamLabel2`)[0].innerHTML = gameData[`game${i}`]['team2'];
                 break;
             }
         }
@@ -201,81 +180,100 @@ function updateModal(gameName){
 // updates game info in database 
 function startGame(gameName){
     let gameRef = rtdb.ref(db, `games/${gameName}`);
-    rtdb.get(gameRef).then(response =>{
-        let gameData = response.val();
-        for(let i = 1; i <= ROUND_COUNT; i++){ 
-            if(!gameData[`game${i}`].played){
-                gameData[`game${i}`].is_playing = true;
-                gameData[`game${i}`].on_deck = false;
-                
-                if (i+1 <= ROUND_COUNT)
-                    gameData[`game${i+1}`].on_deck = true;
-                
-                rtdb.update(gameRef, gameData).then(()=>{
-                    updateGames();
-                });
-                    
-                break;
+    let gameData = gamesData[gameName];
+
+    for(let i = 1; i <= ROUND_COUNT; i++){ 
+        if(!gameData[`game${i}`].played){
+            if (i == ROUND_COUNT) {
+                if (gameData[`game${i}`].team1 == '?' || gameData[`game${i}`].team2 == '?') {
+                    let matchedTeams = findMatchup(gameName);
+                    if (matchedTeams){
+                        gameData[`game${i}`].team1 = matchedTeams[0].team;
+                        gameData[`game${i}`].team2 = matchedTeams[1].team;
+                    } else { return; }
+                }
             }
+            gameData[`game${i}`].is_playing = true;
+            gameData[`game${i}`].on_deck = false;
+            
+            if (i+1 <= ROUND_COUNT)
+                gameData[`game${i+1}`].on_deck = true;
+
+            
+            rtdb.update(gameRef, gameData).then(()=>{
+                updateGames();
+            });
+                
+            break;
         }
-    });   
+    }
 }
 
 
 // increase win count / mark game as played
 // updates team info in database for both playing teams
 // updates game info in database for game played
-function setGamePlayed(gameRoundData, gameName, roundNum){
-    let winner = gameRoundData['winner'];
+function setGamePlayed(gameRoundData, gameName, roundNum, winner){
+
     let otherTeam = winner == gameRoundData['team1'] ? gameRoundData['team2'] : gameRoundData['team1'];
 
-    // winning team played + win count increases
-    let winningTeamRef = rtdb.ref(db, `/teams/${winner}`);
-    rtdb.get(winningTeamRef).then(response=>{
-        let teamData = response.val();
-        teamData['wins'] += 1;
-
-        if (roundNum <= 3) // regular rounds 10 points
-            teamData['score'] += 10;
-        else if (roundNum == 4) // semi finals 15 points
-            teamData['score'] += 15;
-        else if (roundNum == 5) // finals 20 points
-            teamData['score'] += 20;
-        
-        teamData['games_played'][`${gameName}`] = true;
-
-        rtdb.update(winningTeamRef, teamData).then(()=>{
-            updateTeams();
-        });
-    });
-
-    // other team just mark game as played
-    let otherTeamRef = rtdb.ref(db, `/teams/${otherTeam}`);
-    rtdb.get(otherTeamRef).then(response=>{
-        let teamData = response.val();
-        teamData['games_played'][`${gameName}`] = true;
-
-        rtdb.update(otherTeamRef, teamData).then(()=>{
-            updateTeams();
-        });
-    });
-
-    // finals round
-    if (roundNum == ROUND_COUNT - 1){
-        // get the winners from all three rounds
-        // get the team data for the winners
-        // find which team has least points
-        // match up two other teams
-    }
-
     let gameRoundRef = rtdb.ref(db, `games/${gameName}/game${roundNum}`);
+    gameRoundData.is_playing = false;
+    gameRoundData.played = true;
+    gameRoundData.winner = winner;
+
     rtdb.update(gameRoundRef, gameRoundData).then(()=>{
         updateGames();
     });
 
+    // set game played and increase wins and score for winning team
+    teamsData[winner]['wins'] += 1;
+    // regular game +10 points, finals round +15 points
+    teamsData[winner]['score'] += (roundNum < ROUND_COUNT) ? 10 : (roundNum == ROUND_COUNT ? 15 : 0);     
+    teamsData[winner]['games_played'][`${gameName}`] = true;
+    
+    // set game played for losing team
+    teamsData[otherTeam]['games_played'][`${gameName}`] = true;
+
+    rtdb.update(teamsRef, teamsData).then(()=>{
+        updateTeams();
+    });
+
+    // // finals round
+    // if (roundNum == ROUND_COUNT - 1){
+    //     let winners = findMatchup(gameName);
+    //     if (winners) {
+    //         gameRoundData.team1 = winners[0].team;
+    //         gameRoundData.team2 = winners[1].team;
+    //     }
+    // }
+
+}
+
+function findMatchup(gameName){
+    let winners = [];
+    for (let i = 1; i < ROUND_COUNT; i++){
+        winners.push({
+            score: teamsData[gamesData[gameName][`game${i}`].winner].score, 
+            team: gamesData[gameName][`game${i}`].winner
+        });
+    }
+    
+    winners.sort((a,b) => a.score - b.score);
+    
+    if (winners[0].score == winners[1].score){
+        alert(`TIEBREAKER ${winners[0].team} - ${winners[1].team}`);
+        return null;
+    } else {
+        winners.shift();
+        return winners;
+    }
+    
 }
 
 function saveShotgunResults(){
+    // make data a list of objects, each key is an int i and each value is the team in (i+1) place
+    // 0 = 1st place, 1 = 2nd place ...
     let data = {};
     for (let team of teamNames) {
         if ($(`#${team}-select`)[0].value == 'Select') {
@@ -292,20 +290,18 @@ function saveShotgunResults(){
     let standings = Object.values(data);
     let i = 0;
     for (let team of standings){
-        let teamRef = rtdb.ref(db, `/teams/${team}`);
-        rtdb.get(teamRef).then(response=>{
-            let teamData = response.val();
-            teamData['games_played'][`shotgun`] = true;
-            if (10-3*i > 0)
-                teamData['score'] += 10-3*i;
+        let teamData = teamsData[team];
+        teamData['games_played'][`shotgun`] = true;
+        // points are alloted as follows: 10, 7, 4, 1, (everyone else 0)
+        if (10-3*i > 0)
+            teamData['score'] += 10-3*i;
 
-            rtdb.update(teamRef, teamData).then(()=>{
-                updateTeams();
-            });
-
-            i++;
-        });
+        i++;
     }
+
+    rtdb.update(teamsRef, teamsData).then(()=>{
+        updateTeams();
+    });
 
     data['played'] = true;
 
@@ -313,9 +309,6 @@ function saveShotgunResults(){
     rtdb.set(shotgunRef, data);
 }
 
-/* *********************** */
-
-console.clear();
 
 const overlay = document.querySelector(".overlay");
 const sidebar = document.querySelector(".sidebar");
@@ -558,7 +551,7 @@ function createRounds(games){
     let content = ``;
     for (let i = 1; i <= ROUND_COUNT; i++){
         content += `<tr>
-            <td>round ${i}:</td>
+            <td>${i == ROUND_COUNT ? 'finals round' : 'round '+i}:</td>
             <td>${games[`game${i}`]['is_playing'] ? 'Playing Now' : (games[`game${i}`]['on_deck'] ? 'On Deck' : (games[`game${i}`]['played'] ? 'Game Over' : ''))}</td>
             <td>${games[`game${i}`]['winner'] ? games[`game${i}`]['winner'] : games[`game${i}`]['team1']}</td>
             <td>${games[`game${i}`]['winner'] ? 'beat' : 'vs' }</td>
