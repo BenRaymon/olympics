@@ -58,7 +58,12 @@ $('#submit-winner').on('click', (event)=>{
     let winner = $(`#teamRadio1`)[0].checked ? $(`#teamLabel1`)[0].innerHTML : ($(`#teamRadio2`)[0].checked ? $(`#teamLabel2`)[0].innerHTML : null);
     
     let gameName = $(`#game-title`)[0].innerHTML.split('-')[0].trim();
+    // round X (pull the number X out)
     let roundNum = $(`#game-title`)[0].innerHTML.split('-')[1].trim().split(' ')[1];
+    // round X = finals round (X = round)
+    if (roundNum == 'round'){
+        roundNum = ROUND_COUNT;
+    }
     
     let gameData = gamesData[gameName];
 
