@@ -4,7 +4,7 @@ import * as rtdb from "https://www.gstatic.com/firebasejs/9.9.4/firebase-databas
 import * as fbauth from "https://www.gstatic.com/firebasejs/9.9.4/firebase-auth.js";
 
 const firebaseConfig = {
-    apiKey: process.env.FIREBASE_OLYMPICS_KEY,
+    apiKey: 'AIzaSyAsRDs8GIIBv3ulatz8gU2Fqb7I6q01f8s',
     authDomain: "olympics-91f1f.firebaseapp.com",
     databaseURL: "https://olympics-91f1f-default-rtdb.firebaseio.com",
     projectId: "olympics-91f1f",
@@ -12,8 +12,6 @@ const firebaseConfig = {
     messagingSenderId: "146188282258",
     appId: "1:146188282258:web:d67ed0113c4cd3b63df94b"
 };
-
-console.log(process.env.FIREBASE_OLYMPICS_KEY);
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);

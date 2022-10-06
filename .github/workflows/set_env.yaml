@@ -1,9 +1,0 @@
-on:
-  push
-
-jobs:
-  set-key:
-    runs-on: ubuntu-latest
-    steps:
-      - env:
-          FIREBASE_OLYMPICS_KEY: ${{ secrets.FIREBASE_OLYMPICS_KEY }}
