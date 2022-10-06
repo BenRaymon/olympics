@@ -42,16 +42,6 @@ $('#authenticate').on('click', (event)=>{
     });
 });
 
-// on initial page load - get current database objects
-rtdb.get(gamesRef).then((response)=>{
-    gamesData = response.val();    
-    gameNames = Object.keys(gamesData);
-});
-rtdb.get(teamsRef).then((response)=>{
-    teamsData = response.val();
-    teamNames = Object.keys(teamsData);
-});
-
 // submit winner button in modal
 $('#submit-winner').on('click', (event)=>{
     // get winner from checkbox
@@ -87,10 +77,10 @@ $('#submit-winner').on('click', (event)=>{
 
 // updates the games list with the current status
 function updateGames(){
-    rtdb.get(gamesRef).then(async (response)=>{
+    rtdb.onValue(gamesRef, async (response)=>{
         $('#games-table').empty();
         gamesData = response.val();
-
+        gameNames = Object.keys(gamesData);
         for(let game of gameNames){
             $('#games-table').append(`
             <tr class="list__row__game" id=${game} data-game='${game}' data-games='${JSON.stringify(gamesData[game])}'>
@@ -130,8 +120,9 @@ updateGames();
 
 // update leaderboard with current teams status
 function updateTeams(){
-    rtdb.get(teamsRef).then(response=>{
+    rtdb.onValue(teamsRef, response=>{
         teamsData = response.val();
+        teamNames = Object.keys(teamsData);
         // list of team names in order of most points
         let teams = Object.entries(teamsData).sort((a,b) => b[1].score-a[1].score).map(el=> el[0]);
         $('#teams-table').empty();
@@ -206,7 +197,7 @@ function startGame(gameName){
 
             
             rtdb.update(gameRef, gameData).then(()=>{
-                updateGames();
+                //updateGames();
             });
                 
             break;
@@ -228,7 +219,7 @@ function setGamePlayed(gameRoundData, gameName, roundNum, winner){
     gameRoundData.winner = winner;
 
     rtdb.update(gameRoundRef, gameRoundData).then(()=>{
-        updateGames();
+        //updateGames();
     });
 
     // set game played and increase wins and score for winning team
@@ -241,7 +232,7 @@ function setGamePlayed(gameRoundData, gameName, roundNum, winner){
     teamsData[otherTeam]['games_played'][`${gameName}`] = true;
 
     rtdb.update(teamsRef, teamsData).then(()=>{
-        updateTeams();
+        //updateTeams();
     });
 
     // // finals round
@@ -305,7 +296,7 @@ function saveShotgunResults(){
     }
 
     rtdb.update(teamsRef, teamsData).then(()=>{
-        updateTeams();
+        //updateTeams();
     });
 
     data['played'] = true;
@@ -465,7 +456,7 @@ function addPointsListeners(teamName){
         let score  = parseInt($(`.${teamName} #score`)[0].innerHTML);
         let teamRef = rtdb.ref(db, `teams/${teamName}`);
         rtdb.update(teamRef, {'score': score}).then(()=>{
-            updateTeams();
+            //updateTeams();
         });
     });
 }
